@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="600" height="400" viewBox="0 0 600 400" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <!-- Background Elements -->
+    <rect width="600" height="400" fill="#f8f9fa" />
+    
+    <!-- Decorative Circles -->
+    <circle cx="500" cy="100" r="50" fill="#ff000015"/>
+    <circle cx="100" cy="300" r="30" fill="#ff000015"/>
+    
+    <!-- Main Illustration -->
+    <rect x="150" y="100" width="300" height="200" rx="10" fill="#ffffff" stroke="#ff0000" stroke-width="2"/>
+    
+    <!-- Document Lines -->
+    <line x1="180" y1="140" x2="420" y2="140" stroke="#1a1a1a" stroke-width="2"/>
+    <line x1="180" y1="170" x2="380" y2="170" stroke="#1a1a1a" stroke-width="2"/>
+    <line x1="180" y1="200" x2="400" y2="200" stroke="#1a1a1a" stroke-width="2"/>
+    <line x1="180" y1="230" x2="360" y2="230" stroke="#1a1a1a" stroke-width="2"/>
+    
+    <!-- Search Icon -->
+    <circle cx="450" cy="250" r="30" fill="none" stroke="#ff0000" stroke-width="2"/>
+    <line x1="470" y1="270" x2="490" y2="290" stroke="#ff0000" stroke-width="2"/>
+</svg> 
