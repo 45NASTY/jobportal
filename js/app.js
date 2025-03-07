@@ -13,6 +13,7 @@ const logoutButton = document.getElementById('logout');
 
 // Event Listeners
 document.addEventListener('DOMContentLoaded', () => {
+    console.log('App initialized');
     checkAuthStatus();
     setupNavigationEvents();
     handleInitialNavigation();
@@ -34,6 +35,7 @@ function handleInitialNavigation() {
         return;
     }
     
+    // Allow job seekers to access the jobs page
     if (page && document.getElementById(`${page}-template`)) {
         loadPage(page);
     } else {
@@ -70,10 +72,15 @@ function navigateToPage(page) {
 }
 
 function loadPage(page) {
+    console.log('Loading page:', page);
     const template = document.getElementById(`${page}-template`);
-    if (!template) return;
+    if (!template) {
+        console.error(`Template not found for page: ${page}`);
+        return;
+    }
 
     contentDiv.innerHTML = template.innerHTML;
+    console.log('Template loaded into content div');
 
     // Add autocomplete="off" to all forms to prevent browser caching
     const forms = contentDiv.querySelectorAll('form');
@@ -91,6 +98,7 @@ function loadPage(page) {
 
     switch (page) {
         case 'jobs':
+            console.log('Initializing jobs page');
             loadJobs();
             break;
         case 'login':
@@ -148,7 +156,7 @@ function updateUIForAuthenticatedUser() {
     
     const landingPageSections = document.getElementById('landing-page-sections');
     
-    if (localStorage.getItem('user_type') === 'company') {
+    if (currentUser.user_type === 'company') {
         document.querySelectorAll('.company-only').forEach(el => el.style.display = 'block');
         document.querySelectorAll('.jobseeker-only').forEach(el => el.style.display = 'none');
         // Hide landing page sections for company users
@@ -206,13 +214,15 @@ function setupLoginForm() {
             } else {
                 currentUser = data.user;
                 showAlert('Login successful', 'success');
+                
+                // Update UI based on user type
                 updateUIForAuthenticatedUser();
-                // Redirect to manage-jobs for company users, jobs for job seekers
+                
+                // Redirect based on user type
                 if (currentUser.user_type === 'company') {
-                    localStorage.setItem('user_type', 'company');
                     navigateToPage('manage-jobs');
                 } else {
-                    localStorage.setItem('user_type', 'jobseeker');
+                    // For job seekers, show the jobs page
                     navigateToPage('jobs');
                 }
             }
@@ -276,53 +286,174 @@ async function logout() {
 // Job Functions
 async function loadJobs(page = 1) {
     try {
+        console.log('Loading jobs for page:', page);
         const response = await fetch(`${API_URL}?action=jobs&page=${page}`);
         const data = await response.json();
+        console.log('Jobs API response:', data);
 
         const jobsList = document.getElementById('jobs-list');
+        if (!jobsList) {
+            console.error('Jobs list container not found');
+            return;
+        }
+
         jobsList.innerHTML = '';
 
+        if (!data.jobs || data.jobs.length === 0) {
+            console.log('No jobs found in response');
+            jobsList.innerHTML = `
+                <div class="col-12">
+                    <div class="alert alert-info">
+                        No jobs available at the moment.
+                    </div>
+                </div>`;
+            return;
+        }
+
+        console.log(`Rendering ${data.jobs.length} jobs`);
         data.jobs.forEach(job => {
             const jobCard = createJobCard(job);
             jobsList.appendChild(jobCard);
         });
 
-        createPagination(data.pagination);
+        // Create pagination only if there are jobs
+        if (data.pagination && data.pagination.total_pages > 1) {
+            console.log('Creating pagination:', data.pagination);
+            createPagination(data.pagination);
+        }
     } catch (error) {
+        console.error('Error loading jobs:', error);
+        const jobsList = document.getElementById('jobs-list');
+        if (jobsList) {
+            jobsList.innerHTML = `
+                <div class="col-12">
+                    <div class="alert alert-danger">
+                        Error loading jobs. Please try again later.
+                    </div>
+                </div>`;
+        }
         showAlert('Error loading jobs', 'danger');
     }
 }
 
 function createJobCard(job) {
     const col = document.createElement('div');
-    col.className = 'col-md-6 col-lg-4';
+    col.className = 'col-md-6 col-lg-4 mb-4';
 
     col.innerHTML = `
-        <div class="card job-card">
+        <div class="card job-card h-100" style="cursor: pointer;" data-job-id="${job.id}">
             <div class="card-body">
                 <h5 class="card-title">${job.title}</h5>
-                <p class="company-name">${job.company_name || 'Company Name'}</p>
-                <div class="job-meta">
-                    <span><i class="fas fa-map-marker-alt"></i> ${job.location || 'Location N/A'}</span>
-                    <span><i class="fas fa-clock"></i> ${job.job_type}</span>
+                <p class="company-name text-muted mb-2">${job.company_name || 'Company Name'}</p>
+                <div class="job-meta mb-3">
+                    <span class="me-3"><i class="fas fa-map-marker-alt me-1"></i> ${job.location || 'Location N/A'}</span>
+                    <span><i class="fas fa-clock me-1"></i> ${job.job_type}</span>
                 </div>
-                <p class="job-description">${job.description.substring(0, 150)}...</p>
-                <div class="d-flex justify-content-between align-items-center">
-                    <span class="text-primary">${job.salary_range || 'Salary N/A'}</span>
-                    ${currentUser && currentUser.user_type === 'jobseeker' ? 
-                        `<button class="btn btn-primary btn-sm apply-btn" data-job-id="${job.id}">Apply Now</button>` :
-                        ''}
+                <p class="job-description mb-3">${job.description ? job.description.substring(0, 150) + '...' : 'No description available'}</p>
+                <div class="d-flex justify-content-between align-items-center mt-auto">
+                    <span class="text-primary fw-bold">${job.salary_range || 'Salary N/A'}</span>
+                    <span class="text-muted"><small>Click to view details</small></span>
                 </div>
             </div>
         </div>
     `;
 
-    const applyBtn = col.querySelector('.apply-btn');
-    if (applyBtn) {
-        applyBtn.addEventListener('click', () => applyForJob(job.id));
-    }
+    // Add click event to the entire card
+    const card = col.querySelector('.job-card');
+    card.addEventListener('click', () => loadJobDetails(job.id));
 
     return col;
+}
+
+async function loadJobDetails(jobId) {
+    try {
+        const response = await fetch(`${API_URL}?action=job_details&id=${jobId}`, {
+            credentials: 'include'
+        });
+        const data = await response.json();
+
+        if (data.error) {
+            showAlert(data.error, 'danger');
+            return;
+        }
+
+        // Load the job details template
+        loadPage('job-details');
+        
+        // Fill in the job details
+        const job = data.job;
+        document.querySelector('.job-title').textContent = job.title;
+        document.querySelector('.company-name').textContent = job.company_name;
+        document.querySelector('.job-location').textContent = job.location || 'Location N/A';
+        document.querySelector('.job-type').textContent = job.job_type;
+        document.querySelector('.salary-range').textContent = job.salary_range || 'Salary N/A';
+        document.querySelector('.job-description').textContent = job.description;
+        document.querySelector('.job-requirements').textContent = job.requirements;
+        document.querySelector('.posted-date').textContent = new Date(job.created_at).toLocaleDateString();
+
+        // Show/hide application section based on user type
+        const applicationSection = document.getElementById('application-section');
+        if (!currentUser) {
+            applicationSection.innerHTML = `
+                <a href="#" class="btn btn-primary" data-page="login">Login to Apply</a>
+            `;
+        } else if (currentUser.user_type === 'company') {
+            applicationSection.style.display = 'none';
+        }
+
+        // Setup application form
+        setupJobApplicationForm(jobId);
+
+    } catch (error) {
+        console.error('Error loading job details:', error);
+        showAlert('Error loading job details', 'danger');
+    }
+}
+
+function setupJobApplicationForm(jobId) {
+    const showFormBtn = document.getElementById('show-application-form');
+    const formContainer = document.getElementById('application-form-container');
+    const applicationForm = document.getElementById('job-application-form');
+
+    if (!showFormBtn || !formContainer || !applicationForm) return;
+
+    showFormBtn.addEventListener('click', () => {
+        showFormBtn.style.display = 'none';
+        formContainer.style.display = 'block';
+    });
+
+    applicationForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+
+        const coverLetter = document.getElementById('cover-letter').value;
+
+        try {
+            const response = await fetch(API_URL, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
+                body: JSON.stringify({
+                    action: 'apply',
+                    job_id: jobId,
+                    cover_letter: coverLetter
+                }),
+                credentials: 'include'
+            });
+
+            const data = await response.json();
+            if (data.error) {
+                showAlert(data.error, 'danger');
+            } else {
+                showAlert('Application submitted successfully', 'success');
+                // Hide the form after successful submission
+                formContainer.style.display = 'none';
+            }
+        } catch (error) {
+            showAlert('Error submitting application', 'danger');
+        }
+    });
 }
 
 function createPagination(pagination) {
@@ -344,38 +475,6 @@ function createPagination(pagination) {
 
         li.appendChild(a);
         paginationElement.appendChild(li);
-    }
-}
-
-async function applyForJob(jobId) {
-    if (!currentUser) {
-        showAlert('Please login to apply for jobs', 'warning');
-        navigateToPage('login');
-        return;
-    }
-
-    try {
-        const response = await fetch(API_URL, {
-            method: 'POST',
-            headers: { 
-                'Content-Type': 'application/json',
-                'Accept': 'application/json'
-            },
-            body: JSON.stringify({
-                action: 'apply',
-                job_id: jobId
-            }),
-            credentials: 'include'
-        });
-
-        const data = await response.json();
-        if (data.error) {
-            showAlert(data.error, 'danger');
-        } else {
-            showAlert('Application submitted successfully', 'success');
-        }
-    } catch (error) {
-        showAlert('Error submitting application', 'danger');
     }
 }
 
@@ -430,8 +529,185 @@ async function loadCompanyJobs() {
             const jobCard = createManageJobCard(job);
             jobsList.appendChild(jobCard);
         });
+
+        // Load applications when manage-jobs page is loaded
+        loadJobApplications();
+
+        // Set up tab event listeners
+        const applicationsTab = document.getElementById('applications-tab');
+        if (applicationsTab) {
+            applicationsTab.addEventListener('click', loadJobApplications);
+        }
     } catch (error) {
         showAlert('Error loading company jobs', 'danger');
+    }
+}
+
+async function loadJobApplications() {
+    try {
+        const response = await fetch(`${API_URL}?action=job_applications`, {
+            credentials: 'include'
+        });
+        const data = await response.json();
+
+        const applicationsList = document.getElementById('applications-list');
+        if (!applicationsList) return;
+
+        applicationsList.innerHTML = '';
+
+        if (data.applications && data.applications.length > 0) {
+            data.applications.forEach(application => {
+                const row = createApplicationRow(application);
+                applicationsList.appendChild(row);
+            });
+        } else {
+            applicationsList.innerHTML = `
+                <tr>
+                    <td colspan="6" class="text-center">No applications found</td>
+                </tr>
+            `;
+        }
+    } catch (error) {
+        showAlert('Error loading applications', 'danger');
+    }
+}
+
+function createApplicationRow(application) {
+    const row = document.createElement('tr');
+    
+    const formattedDate = new Date(application.applied_date).toLocaleDateString();
+    const statusClass = getStatusClass(application.status);
+    
+    row.innerHTML = `
+        <td>${application.job_title}</td>
+        <td>${application.applicant_name}</td>
+        <td>${application.email}</td>
+        <td>${formattedDate}</td>
+        <td>
+            <span class="badge ${statusClass}">${application.status}</span>
+        </td>
+        <td>
+            <div class="btn-group">
+                <button class="btn btn-sm btn-outline-primary view-application" 
+                        data-application-id="${application.id}">
+                    <i class="fas fa-eye"></i>
+                </button>
+                <button class="btn btn-sm btn-outline-success update-status" 
+                        data-application-id="${application.id}"
+                        data-current-status="${application.status}">
+                    <i class="fas fa-check"></i>
+                </button>
+            </div>
+        </td>
+    `;
+
+    // Add event listeners for action buttons
+    row.querySelector('.view-application').addEventListener('click', () => 
+        viewApplication(application)
+    );
+    
+    row.querySelector('.update-status').addEventListener('click', () => 
+        updateApplicationStatus(application)
+    );
+
+    return row;
+}
+
+function getStatusClass(status) {
+    switch (status.toLowerCase()) {
+        case 'pending':
+            return 'bg-warning text-dark';
+        case 'reviewed':
+            return 'bg-info text-dark';
+        case 'accepted':
+            return 'bg-success';
+        case 'rejected':
+            return 'bg-danger';
+        default:
+            return 'bg-secondary';
+    }
+}
+
+async function viewApplication(application) {
+    // Create and show modal with application details
+    const modalHtml = `
+        <div class="modal fade" id="applicationModal" tabindex="-1">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Application Details</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <h6>Job Title</h6>
+                            <p>${application.job_title}</p>
+                        </div>
+                        <div class="mb-3">
+                            <h6>Applicant Information</h6>
+                            <p><strong>Name:</strong> ${application.applicant_name}</p>
+                            <p><strong>Email:</strong> ${application.email}</p>
+                            <p><strong>Phone:</strong> ${application.phone || 'N/A'}</p>
+                        </div>
+                        <div class="mb-3">
+                            <h6>Cover Letter</h6>
+                            <p>${application.cover_letter || 'No cover letter provided'}</p>
+                        </div>
+                        <div class="mb-3">
+                            <h6>Status</h6>
+                            <span class="badge ${getStatusClass(application.status)}">${application.status}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    // Remove existing modal if any
+    const existingModal = document.getElementById('applicationModal');
+    if (existingModal) {
+        existingModal.remove();
+    }
+
+    // Add new modal to DOM
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+
+    // Show modal
+    const modal = new bootstrap.Modal(document.getElementById('applicationModal'));
+    modal.show();
+}
+
+async function updateApplicationStatus(application) {
+    console.log(application," this is app")
+    const statuses = ['pending', 'reviewed', 'accepted', 'rejected'];
+    const currentIndex = statuses.indexOf(application.status.toLowerCase());
+    const nextStatus = statuses[(currentIndex + 1) % statuses.length];
+
+    try {
+        const response = await fetch(API_URL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify({
+                action: 'update_application_status',
+                application_id: application?.id,
+                status: nextStatus
+            }),
+            credentials: 'include'
+        });
+
+        const data = await response.json();
+        console.log(data, "this is data")
+        if (data.error) {
+            showAlert(data.error, 'danger');
+        } else {
+            showAlert('Application status updated successfully', 'success');
+            loadJobApplications(); // Refresh the applications list
+        }
+    } catch (error) {
+        showAlert(error, 'danger');
     }
 }
 

@@ -177,7 +177,7 @@ class JobController {
     public function getJobApplications() {
         session_start();
         if (!isset($_SESSION['user_id']) || $_SESSION['user_type'] !== 'company') {
-            return ['error' => 'Unauthorized access'];
+            return ['error' => $_SESSION['user_type']];
         }
 
         $job_id = isset($_GET['job_id']) ? (int)$_GET['job_id'] : 0;
